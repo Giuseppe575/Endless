@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Endless Runner - Prototipo Mobile</title>
+
+```
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com"></script>
+
+<!-- React & ReactDOM -->
+<script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+<script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+
+<!-- Babel Standalone -->
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<style>
+    * {
+        -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        -webkit-user-select: none;
+        user-select: none;
+    }
+    
+    body {
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    }
+    
+    #root {
+        width: 100vw;
+        height: 100vh;
+        position: fixed;
+        top: 0;
+        left: 0;
+    }
+</style>
+```
+
+</head>
+<body>
+    <div id="root"></div>
+
+```
+<script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    // Icone SVG inline
+    const PlayIcon = () => (
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polygon points="5 3 19 12 5 21 5 3"></polygon>
+        </svg>
+    );
+
+    const RotateIcon = () => (
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="1 4 1 10 7 10"></polyline>
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+        </svg>
+    );
+
+    const TrophyIcon = () => (
+        <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"></path>
+            <path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"></path>
+            <path d="M4 22h16"></path>
+            <path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"></path>
+            <path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"></path>
+            <path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"></path>
+        </svg>
+    );
+
+    const CoinsIcon = () => (
+        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="8" cy="8" r="6"></circle>
+            <path d="M18.09 10.37A6 6 0 1 1 10.34 18"></path>
+            <path d="M7 6h1v4"></path>
+            <path d="m16.71 13.88.7.71-2.82 2.82"></path>
+        </svg>
+    );
+
+    const EndlessRunner = () => {
+        const [gameState, setGameState] = useState('menu');
+        const [score, setScore] = useState(0);
+        const [coins, setCoins] = useState(0);
+        const [highScore, setHighScore] = useState(() => {
+            return parseInt(localStorage.getItem('highScore') || '0');
+        });
+        const [playerLane, setPlayerLane] = useState(1);
+        const [isJumping, setIsJumping] = useState(false);
+        const [isSliding, setIsSliding] = useState(false);
+        const [items, setItems] = useState([]);
+        
+        const itemIdRef = useRef(0);
+        const touchStartRef = useRef({ x: 0, y: 0 });
+
+        // Controlli tastiera
+        useEffect(() => {
+            const handleKeyDown = (e) => {
+                if (gameState !== 'playing') return;
+                
+                switch(e.key) {
+                    case 'ArrowLeft':
+                        if (playerLane > 0) setPlayerLane(prev => prev - 1);
+                        break;
+                    case 'ArrowRight':
+                        if (playerLane < 2) setPlayerLane(prev => prev + 1);
+                        break;
+                    case 'ArrowUp':
+                    case ' ':
+                        if (!isJumping && !isSliding) {
+                            setIsJumping(true);
+                            setTimeout(() => setIsJumping(false), 600);
+                        }
+                        break;
+                    case 'ArrowDown':
+                        if (!isJumping && !isSliding) {
+                            setIsSliding(true);
+                            setTimeout(() => setIsSliding(false), 400);
+                        }
+                        break;
+                }
+            };
+
+            window.addEventListener('keydown', handleKeyDown);
+            return () => window.removeEventListener('keydown', handleKeyDown);
+        }, [gameState, playerLane, isJumping, isSliding]);
+
+        // Controlli touch
+        const handleTouchStart = (e) => {
+            touchStartRef.current = {
+                x: e.touches[0].clientX,
+                y: e.touches[0].clientY
+            };
+        };
+
+        const handleTouchEnd = (e) => {
+            if (gameState !== 'playing') return;
+            
+            const deltaX = e.changedTouches[0].clientX - touchStartRef.current.x;
+            const deltaY = e.changedTouches[0].clientY - touchStartRef.current.y;
+            
+            if (Math.abs(deltaX) > Math.abs(deltaY)) {
+                if (deltaX > 50 && playerLane < 2) {
+                    setPlayerLane(prev => prev + 1);
+                } else if (deltaX < -50 && playerLane > 0) {
+                    setPlayerLane(prev => prev - 1);
+                }
+            } else {
+                if (deltaY < -50 && !isJumping && !isSliding) {
+                    setIsJumping(true);
+                    setTimeout(() => setIsJumping(false), 600);
+                } else if (deltaY > 50 && !isJumping && !isSliding) {
+                    setIsSliding(true);
+                    setTimeout(() => setIsSliding(false), 400);
+                }
+            }
+        };
+
+        // Game loop - Movimento
+        useEffect(() => {
+            if (gameState !== 'playing') return;
+
+            const moveInterval = setInterval(() => {
+                const speed = 4;
+                
+                setScore(prev => prev + 1);
+                
+                setItems(prevItems => {
+                    const updated = prevItems.map(item => ({
+                        ...item,
+                        y: item.y + speed
+                    })).filter(item => item.y < 800);
+                    
+                    for (let item of updated) {
+                        if (item.lane === playerLane && item.y > 420 && item.y < 520) {
+                            if (item.type === 'coin') {
+                                setCoins(c => c + 1);
+                                setScore(s => s + 10);
+                                return updated.filter(i => i.id !== item.id);
+                            } else if (item.type === 'obstacle-high' && !isJumping) {
+                                setGameState('gameover');
+                            } else if (item.type === 'obstacle-low' && !isSliding) {
+                                setGameState('gameover');
+                            }
+                        }
+                    }
+                    
+                    return updated;
+                });
+            }, 16);
+
+            return () => clearInterval(moveInterval);
+        }, [gameState, playerLane, isJumping, isSliding]);
+
+        // Generazione ostacoli
+        useEffect(() => {
+            if (gameState !== 'playing') return;
+
+            const obstacleInterval = setInterval(() => {
+                const lane = Math.floor(Math.random() * 3);
+                const type = Math.random() > 0.5 ? 'obstacle-high' : 'obstacle-low';
+                
+                setItems(prev => [...prev, {
+                    id: itemIdRef.current++,
+                    lane,
+                    type,
+                    y: 0
+                }]);
+            }, 1500);
+
+            return () => clearInterval(obstacleInterval);
+        }, [gameState]);
+
+        // Generazione monete
+        useEffect(() => {
+            if (gameState !== 'playing') return;
+
+            const coinInterval = setInterval(() => {
+                const lane = Math.floor(Math.random() * 3);
+                
+                if (Math.random() > 0.6) {
+                    for (let i = 0; i < 5; i++) {
+                        setItems(prev => [...prev, {
+                            id: itemIdRef.current++,
+                            lane,
+                            type: 'coin',
+                            y: 0 - (i * 80)
+                        }]);
+                    }
+                } else {
+                    setItems(prev => [...prev, {
+                        id: itemIdRef.current++,
+                        lane,
+                        type: 'coin',
+                        y: 0
+                    }]);
+                }
+            }, 1000);
+
+            return () => clearInterval(coinInterval);
+        }, [gameState]);
+
+        // Salva high score
+        useEffect(() => {
+            if (gameState === 'gameover' && score > highScore) {
+                setHighScore(score);
+                localStorage.setItem('highScore', score.toString());
+            }
+        }, [gameState, score, highScore]);
+
+        const startGame = () => {
+            setGameState('playing');
+            setScore(0);
+            setCoins(0);
+            setPlayerLane(1);
+            setIsJumping(false);
+            setIsSliding(false);
+            setItems([]);
+            itemIdRef.current = 0;
+        };
+
+        const getLaneX = (lane) => 10 + lane * 33.33;
+
+        return (
+            <div 
+                className="w-full h-screen bg-gradient-to-b from-sky-400 to-sky-200 overflow-hidden relative"
+                onTouchStart={handleTouchStart}
+                onTouchEnd={handleTouchEnd}
+            >
+                {/* HUD */}
+                {gameState === 'playing' && (
+                    <div className="absolute top-4 left-0 right-0 z-30 px-4">
+                        <div className="flex justify-between items-center">
+                            <div className="bg-black/50 text-white px-4 py-2 rounded-full font-bold text-xl">
+                                {score}
+                            </div>
+                            <div className="bg-yellow-500 text-white px-4 py-2 rounded-full font-bold text-xl flex items-center gap-2">
+                                <CoinsIcon />
+                                {coins}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Game area */}
+                {gameState === 'playing' && (
+                    <div className="absolute inset-0">
+                        <div className="absolute inset-0 flex">
+                            <div className="flex-1 border-r-4 border-white/40 border-dashed" />
+                            <div className="flex-1 border-r-4 border-white/40 border-dashed" />
+                            <div className="flex-1" />
+                        </div>
+
+                        <div className="absolute inset-0 z-20">
+                            {items.map(item => (
+                                <div
+                                    key={item.id}
+                                    className="absolute"
+                                    style={{
+                                        left: `${getLaneX(item.lane)}%`,
+                                        top: `${item.y}px`,
+                                        width: '13%',
+                                        transform: 'translateZ(0)',
+                                        WebkitTransform: 'translateZ(0)',
+                                        willChange: 'top'
+                                    }}
+                                >
+                                    {item.type === 'coin' ? (
+                                        <div className="bg-yellow-400 border-4 border-yellow-600 rounded-full w-14 h-14 mx-auto flex items-center justify-center text-3xl shadow-xl">
+                                            ⭐
+                                        </div>
+                                    ) : item.type === 'obstacle-high' ? (
+                                        <div className="bg-red-600 border-4 border-red-800 rounded-lg h-24 w-full flex items-center justify-center text-4xl shadow-xl">
+                                            ⚠️
+                                        </div>
+                                    ) : (
+                                        <div className="bg-orange-600 border-4 border-orange-800 rounded-lg h-14 w-full flex items-center justify-center text-3xl shadow-xl">
+                                            📦
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+
+                        <div
+                            className="absolute transition-all duration-300 ease-out z-25"
+                            style={{
+                                left: `${getLaneX(playerLane)}%`,
+                                bottom: isJumping ? '180px' : isSliding ? '60px' : '100px',
+                                width: '13%',
+                                height: isSliding ? '50px' : '70px'
+                            }}
+                        >
+                            <div className="w-full h-full bg-blue-600 border-4 border-blue-800 rounded-lg flex items-center justify-center text-4xl shadow-xl">
+                                {isJumping ? '🚀' : isSliding ? '⬇️' : '🏃'}
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Menu */}
+                {gameState === 'menu' && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-gradient-to-b from-purple-600 to-blue-600">
+                        <div className="text-center text-white space-y-6 px-4">
+                            <h1 className="text-6xl font-bold drop-shadow-lg">🏃 RUNNER</h1>
+                            <p className="text-2xl">Prototipo Mobile</p>
+                            
+                            {highScore > 0 && (
+                                <div className="bg-white/20 p-6 rounded-2xl backdrop-blur">
+                                    <TrophyIcon />
+                                    <p className="text-4xl font-bold mt-2">{highScore}</p>
+                                    <p className="text-sm">Record</p>
+                                </div>
+                            )}
+
+                            <button
+                                onClick={startGame}
+                                className="bg-green-500 hover:bg-green-600 active:bg-green-700 text-white font-bold py-6 px-12 rounded-full text-3xl flex items-center gap-3 mx-auto shadow-2xl"
+                            >
+                                <PlayIcon />
+                                GIOCA
+                            </button>
+
+                            <div className="bg-white/10 p-6 rounded-2xl backdrop-blur max-w-sm mx-auto">
+                                <h3 className="font-bold text-xl mb-3">🎮 COMANDI</h3>
+                                <div className="text-left space-y-1 text-base">
+                                    <p>📱 Swipe per muoverti</p>
+                                    <p>⬅️➡️ Cambia corsia</p>
+                                    <p>⬆️ Salta (ostacoli rossi ⚠️)</p>
+                                    <p>⬇️ Scivola (ostacoli arancioni 📦)</p>
+                                    <p>⭐ Raccogli monete!</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Game Over */}
+                {gameState === 'gameover' && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/80 backdrop-blur">
+                        <div className="text-center text-white space-y-6 p-8">
+                            <h2 className="text-5xl font-bold text-red-500">GAME OVER</h2>
+                            
+                            <div className="bg-white/20 p-6 rounded-2xl backdrop-blur">
+                                <p className="text-2xl mb-2">Punteggio</p>
+                                <p className="text-6xl font-bold text-yellow-400">{score}</p>
+                            </div>
+
+                            <div className="bg-white/20 p-4 rounded-2xl backdrop-blur flex items-center justify-center gap-3">
+                                <CoinsIcon />
+                                <span className="text-4xl font-bold">{coins}</span>
+                            </div>
+
+                            {score === highScore && score > 0 && (
+                                <div className="bg-yellow-500/30 p-4 rounded-2xl backdrop-blur">
+                                    <p className="text-2xl">🏆 NUOVO RECORD! 🏆</p>
+                                </div>
+                            )}
+
+                            <button
+                                onClick={startGame}
+                                className="bg-blue-500 hover:bg-blue-600 active:bg-blue-700 text-white font-bold py-4 px-10 rounded-full text-2xl flex items-center gap-3 mx-auto shadow-xl"
+                            >
+                                <RotateIcon />
+                                RIPROVA
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    // Render app
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<EndlessRunner />);
+</script>
+```
+
+</body>
+</html>
